@@ -20,7 +20,7 @@
 3. 等待 Companion 状态变为“就绪”，然后点击“立即重启”。
 4. 如需每日计划，勾选项目的“纳入定时”，设置时间并启用每日定时。
 
-companion 会复制到项目的 `LocalPackages/com.wepie.unity-restart-companion`，并在 `Packages/manifest.json` 中加入相对 `file:` 引用。安装器会生成完整性记录；检测到用户修改时拒绝覆盖或删除。
+companion 会复制到项目的 `LocalPackages/com.shw.unity-restart-companion`，并在 `Packages/manifest.json` 中加入相对 `file:` 引用。安装器会生成完整性记录；检测到用户修改时拒绝覆盖或删除。旧版 `com.wepie.unity-restart-companion` 安装会在升级时自动迁移。
 
 `Window-Title-Renamer` 更新版运行时，本工具会通过当前用户命名管道迁移“持续保持”标题规则。标题工具不可用时仍执行重启，但不恢复标题。
 

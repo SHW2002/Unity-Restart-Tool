@@ -7,10 +7,17 @@ namespace UnityRestartTool.Services;
 
 internal sealed class CompanionInstaller
 {
-    internal const string PackageName = "com.wepie.unity-restart-companion";
-    internal const string ManifestReference = "file:../LocalPackages/com.wepie.unity-restart-companion";
+    internal const string PackageName = "com.shw.unity-restart-companion";
+    internal const string ManifestReference = "file:../LocalPackages/com.shw.unity-restart-companion";
+    internal const string LegacyPackageName = "com.wepie.unity-restart-companion";
+    internal const string LegacyManifestReference = "file:../LocalPackages/com.wepie.unity-restart-companion";
     private const string InstallStateFileName = ".unity-restart-install.json";
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly PackageIdentity[] ManagedPackages =
+    [
+        new(PackageName, ManifestReference),
+        new(LegacyPackageName, LegacyManifestReference),
+    ];
     private readonly string _sourcePackagePath;
 
     public CompanionInstaller(string? sourcePackagePath = null)
@@ -25,7 +32,31 @@ internal sealed class CompanionInstaller
 
     public CompanionInstallInfo Inspect(string projectPath)
     {
-        string targetPath = GetTargetPackagePath(projectPath);
+        CompanionInstallInfo current = InspectPackage(
+            projectPath,
+            ManagedPackages[0]);
+        if (current.Installed || current.HasConflict)
+        {
+            return current;
+        }
+
+        CompanionInstallInfo legacy = InspectPackage(
+            projectPath,
+            ManagedPackages[1]);
+        if (legacy.Installed && !legacy.HasConflict)
+        {
+            return legacy with { Message = "已安装旧包名，点击安装 / 升级完成迁移" };
+        }
+        return legacy.Installed || legacy.HasConflict
+            ? legacy with { Message = $"旧包名: {legacy.Message}" }
+            : current;
+    }
+
+    private static CompanionInstallInfo InspectPackage(
+        string projectPath,
+        PackageIdentity package)
+    {
+        string targetPath = GetTargetPackagePath(projectPath, package.Name);
         string manifestPath = GetManifestPath(projectPath);
         if (!Directory.Exists(targetPath) || !File.Exists(manifestPath))
         {
@@ -35,8 +66,8 @@ internal sealed class CompanionInstaller
         try
         {
             JsonObject manifest = ReadManifest(manifestPath);
-            string? reference = manifest["dependencies"]?[PackageName]?.GetValue<string>();
-            if (!string.Equals(reference, ManifestReference, StringComparison.OrdinalIgnoreCase))
+            string? reference = manifest["dependencies"]?[package.Name]?.GetValue<string>();
+            if (!string.Equals(reference, package.ManifestReference, StringComparison.OrdinalIgnoreCase))
             {
                 return new CompanionInstallInfo(false, true, "存在冲突的包引用");
             }
@@ -54,13 +85,10 @@ internal sealed class CompanionInstaller
 
     public void Install(string projectPath)
     {
-        if (!Directory.Exists(_sourcePackagePath) ||
-            !File.Exists(Path.Combine(_sourcePackagePath, "package.json")))
-        {
-            throw new DirectoryNotFoundException($"未找到 companion 发布内容: {_sourcePackagePath}");
-        }
+        ValidateSourcePackage();
 
-        string targetPath = GetTargetPackagePath(projectPath);
+        string targetPath = GetTargetPackagePath(projectPath, PackageName);
+        string legacyTargetPath = GetTargetPackagePath(projectPath, LegacyPackageName);
         string manifestPath = GetManifestPath(projectPath);
         if (!File.Exists(manifestPath))
         {
@@ -70,25 +98,19 @@ internal sealed class CompanionInstaller
         JsonObject existingManifest = ReadManifest(manifestPath);
         JsonObject existingDependencies = existingManifest["dependencies"] as JsonObject ??
             throw new InvalidDataException("manifest.json 缺少 dependencies 对象。");
-        if (existingDependencies.TryGetPropertyValue(PackageName, out JsonNode? existingReference) &&
-            existingReference is not null &&
-            !string.Equals(
-                existingReference.GetValue<string>(),
-                ManifestReference,
-                StringComparison.OrdinalIgnoreCase))
+        foreach (PackageIdentity package in ManagedPackages)
         {
-            throw new InvalidOperationException(
-                $"manifest 已包含不同的 {PackageName} 引用，拒绝覆盖。");
+            EnsureManifestReferenceIsManaged(existingDependencies, package);
         }
 
+        foreach (PackageIdentity package in ManagedPackages)
+        {
+            EnsurePackageCanBeChanged(
+                GetTargetPackagePath(projectPath, package.Name),
+                "覆盖");
+        }
         if (Directory.Exists(targetPath))
         {
-            if (!VerifyInstalledFiles(targetPath, out string verificationError))
-            {
-                throw new InvalidOperationException(
-                    $"companion 包包含用户修改，拒绝覆盖: {verificationError}");
-            }
-
             Directory.Delete(targetPath, true);
         }
 
@@ -99,14 +121,12 @@ internal sealed class CompanionInstaller
         {
             UpdateManifest(manifestPath, dependencies =>
             {
-                if (dependencies.TryGetPropertyValue(PackageName, out JsonNode? existing) &&
-                    existing is not null &&
-                    !string.Equals(existing.GetValue<string>(), ManifestReference, StringComparison.OrdinalIgnoreCase))
+                foreach (PackageIdentity package in ManagedPackages)
                 {
-                    throw new InvalidOperationException(
-                        $"manifest 已包含不同的 {PackageName} 引用，拒绝覆盖。");
+                    EnsureManifestReferenceIsManaged(dependencies, package);
                 }
 
+                dependencies.Remove(LegacyPackageName);
                 dependencies[PackageName] = ManifestReference;
             });
         }
@@ -115,42 +135,105 @@ internal sealed class CompanionInstaller
             Directory.Delete(targetPath, true);
             throw;
         }
+
+        if (Directory.Exists(legacyTargetPath))
+        {
+            Directory.Delete(legacyTargetPath, true);
+        }
     }
 
     public void Uninstall(string projectPath)
     {
-        string targetPath = GetTargetPackagePath(projectPath);
         string manifestPath = GetManifestPath(projectPath);
-        if (Directory.Exists(targetPath) && !VerifyInstalledFiles(targetPath, out string verificationError))
+        if (File.Exists(manifestPath))
         {
-            throw new InvalidOperationException(
-                $"companion 包包含用户修改，拒绝删除: {verificationError}");
+            JsonObject manifest = ReadManifest(manifestPath);
+            JsonObject dependencies = manifest["dependencies"] as JsonObject ??
+                throw new InvalidDataException("manifest.json 缺少 dependencies 对象。");
+            foreach (PackageIdentity package in ManagedPackages)
+            {
+                EnsureManifestReferenceIsManaged(dependencies, package);
+            }
+        }
+
+        foreach (PackageIdentity package in ManagedPackages)
+        {
+            EnsurePackageCanBeChanged(
+                GetTargetPackagePath(projectPath, package.Name),
+                "删除");
         }
 
         if (File.Exists(manifestPath))
         {
             UpdateManifest(manifestPath, dependencies =>
             {
-                if (dependencies.TryGetPropertyValue(PackageName, out JsonNode? existing) &&
-                    existing is not null &&
-                    string.Equals(existing.GetValue<string>(), ManifestReference, StringComparison.OrdinalIgnoreCase))
+                foreach (PackageIdentity package in ManagedPackages)
                 {
-                    dependencies.Remove(PackageName);
+                    EnsureManifestReferenceIsManaged(dependencies, package);
+                    dependencies.Remove(package.Name);
                 }
             });
         }
 
-        if (Directory.Exists(targetPath))
+        foreach (PackageIdentity package in ManagedPackages)
         {
-            Directory.Delete(targetPath, true);
+            string targetPath = GetTargetPackagePath(projectPath, package.Name);
+            if (Directory.Exists(targetPath))
+            {
+                Directory.Delete(targetPath, true);
+            }
         }
     }
 
-    private static string GetTargetPackagePath(string projectPath) =>
-        Path.Combine(projectPath, "LocalPackages", PackageName);
+    private static string GetTargetPackagePath(string projectPath, string packageName) =>
+        Path.Combine(projectPath, "LocalPackages", packageName);
 
     private static string GetManifestPath(string projectPath) =>
         Path.Combine(projectPath, "Packages", "manifest.json");
+
+    private void ValidateSourcePackage()
+    {
+        string packageJsonPath = Path.Combine(_sourcePackagePath, "package.json");
+        if (!Directory.Exists(_sourcePackagePath) || !File.Exists(packageJsonPath))
+        {
+            throw new DirectoryNotFoundException($"未找到 companion 发布内容: {_sourcePackagePath}");
+        }
+
+        string? sourcePackageName = JsonNode.Parse(File.ReadAllText(packageJsonPath))?["name"]?
+            .GetValue<string>();
+        if (!string.Equals(sourcePackageName, PackageName, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"companion package.json 的 name 必须为 {PackageName}。");
+        }
+    }
+
+    private static void EnsureManifestReferenceIsManaged(
+        JsonObject dependencies,
+        PackageIdentity package)
+    {
+        if (dependencies.TryGetPropertyValue(package.Name, out JsonNode? existing) &&
+            existing is not null &&
+            !string.Equals(
+                existing.GetValue<string>(),
+                package.ManifestReference,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"manifest 已包含不同的 {package.Name} 引用，拒绝修改。");
+        }
+    }
+
+    private static void EnsurePackageCanBeChanged(string targetPath, string operation)
+    {
+        if (Directory.Exists(targetPath) &&
+            !VerifyInstalledFiles(targetPath, out string verificationError))
+        {
+            throw new InvalidOperationException(
+                $"companion 包 {Path.GetFileName(targetPath)} 包含用户修改，" +
+                $"拒绝{operation}: {verificationError}");
+        }
+    }
 
     private static JsonObject ReadManifest(string path)
     {
@@ -287,6 +370,8 @@ internal sealed class CompanionInstaller
         using FileStream stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream));
     }
+
+    private sealed record PackageIdentity(string Name, string ManifestReference);
 
     private sealed record InstallState(int Version, Dictionary<string, string> Files);
 }

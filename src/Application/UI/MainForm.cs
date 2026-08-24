@@ -17,8 +17,8 @@ internal sealed class MainForm : Form
     private static readonly Color BorderColor = Color.FromArgb(61, 68, 82);
     private static readonly Color PrimaryTextColor = Color.FromArgb(239, 242, 247);
     private static readonly Color SecondaryTextColor = Color.FromArgb(164, 173, 189);
-    private static readonly Color AccentColor = Color.FromArgb(240, 166, 46);
-    private static readonly Color AccentHoverColor = Color.FromArgb(255, 184, 67);
+    private static readonly Color AccentColor = Color.FromArgb(29, 78, 216);
+    private static readonly Color AccentHoverColor = Color.FromArgb(37, 99, 235);
     private static readonly Color SuccessColor = Color.FromArgb(78, 194, 133);
     private static readonly Color WarningColor = Color.FromArgb(245, 190, 71);
     private static readonly Color ErrorColor = Color.FromArgb(240, 103, 117);
@@ -124,11 +124,11 @@ internal sealed class MainForm : Form
             Padding = new Padding(20, 16, 20, 12),
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 215F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(BuildHeader(), 0, 0);
         root.Controls.Add(BuildScheduleBand(), 0, 1);
         root.Controls.Add(BuildInstanceArea(), 0, 2);
@@ -141,35 +141,40 @@ internal sealed class MainForm : Form
     {
         TableLayoutPanel header = new()
         {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
             Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 0, 8),
         };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         TableLayoutPanel titles = new()
         {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 2,
             Margin = Padding.Empty,
         };
-        titles.RowStyles.Add(new RowStyle(SizeType.Absolute, 37F));
-        titles.RowStyles.Add(new RowStyle(SizeType.Absolute, 25F));
+        titles.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        titles.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Label title = new()
         {
             AutoSize = true,
             Text = "Unity Restart Tool",
             Font = new Font("Segoe UI Semibold", 20F, FontStyle.Bold),
             ForeColor = PrimaryTextColor,
-            Margin = Padding.Empty,
+            Margin = new Padding(0, 0, 0, 2),
         };
         _summaryLabel.AutoSize = true;
         _summaryLabel.ForeColor = SecondaryTextColor;
         _summaryLabel.Text = "正在发现 Unity 与团结编辑器...";
-        _summaryLabel.Margin = new Padding(2, 0, 0, 0);
+        _summaryLabel.Margin = new Padding(2, 2, 0, 0);
         titles.Controls.Add(title, 0, 0);
         titles.Controls.Add(_summaryLabel, 0, 1);
 
@@ -287,7 +292,7 @@ internal sealed class MainForm : Form
         {
             BackColor = SurfaceColor,
             ForeColor = PrimaryTextColor,
-            SelectionBackColor = Color.FromArgb(54, 63, 77),
+            SelectionBackColor = Color.FromArgb(30, 64, 112),
             SelectionForeColor = PrimaryTextColor,
             Padding = new Padding(6, 0, 6, 0),
         };
@@ -430,11 +435,12 @@ internal sealed class MainForm : Form
 
     private Control BuildStatusBar()
     {
+        _statusLabel.AutoSize = true;
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Text = "就绪";
         _statusLabel.ForeColor = SecondaryTextColor;
         _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _statusLabel.Padding = new Padding(2, 4, 0, 0);
+        _statusLabel.Padding = new Padding(2, 4, 0, 2);
         return _statusLabel;
     }
 
@@ -1074,7 +1080,7 @@ internal sealed class MainForm : Form
         button.FlatAppearance.BorderSize = 1;
         button.FlatAppearance.BorderColor = primary ? AccentColor : BorderColor;
         button.BackColor = primary ? AccentColor : RaisedColor;
-        button.ForeColor = primary ? Color.FromArgb(29, 25, 18) : PrimaryTextColor;
+        button.ForeColor = PrimaryTextColor;
         button.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
         button.Cursor = Cursors.Hand;
         button.Margin = new Padding(6, 0, 0, 0);

@@ -189,8 +189,9 @@ internal sealed class RestartOrchestrator
             return Skip(instance, "编辑器主窗口已经消失", results);
         }
 
-        PersistentTitleRule? titleRule = await _titleClient.QueryRuleAsync(
+        PersistentTitleRule? titleRule = await _titleClient.QueryRestoreRuleAsync(
             currentInstance.MainWindowHandle,
+            currentInstance.WindowTitle,
             cancellationToken);
         Report(currentInstance, RestartStage.Preflight, "预检通过");
         return new PreparedInstance(currentInstance, snapshot, titleRule);

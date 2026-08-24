@@ -78,8 +78,9 @@ internal sealed class WindowTitleRenamerClient
         }
     }
 
-    public async Task<PersistentTitleRule?> QueryRuleAsync(
+    public async Task<PersistentTitleRule?> QueryRestoreRuleAsync(
         IntPtr windowHandle,
+        string currentWindowTitle,
         CancellationToken cancellationToken)
     {
         try
@@ -94,9 +95,15 @@ internal sealed class WindowTitleRenamerClient
                     $"查询标题规则被拒绝: {response.Error ?? "未知协议错误"}");
                 return null;
             }
-            return response.HasRule && !string.IsNullOrWhiteSpace(response.Title)
-                ? new PersistentTitleRule(response.Title)
-                : null;
+            PersistentTitleRule? restoreRule = SelectRestoreRule(
+                response.HasRule,
+                response.Title,
+                currentWindowTitle);
+            if (!response.HasRule && restoreRule is not null)
+            {
+                _logger.Info("标题联动", "未找到持久标题规则，将使用当前窗口标题恢复");
+            }
+            return restoreRule;
         }
         catch (Exception exception) when (
             exception is TimeoutException or IOException or OperationCanceledException)
@@ -194,6 +201,17 @@ internal sealed class WindowTitleRenamerClient
 
     internal static bool IsSupportedVersion(Version version) =>
         version >= MinimumSupportedVersion;
+
+    internal static PersistentTitleRule? SelectRestoreRule(
+        bool hasPersistentRule,
+        string? persistentTitle,
+        string? currentWindowTitle)
+    {
+        string? title = hasPersistentRule && !string.IsNullOrWhiteSpace(persistentTitle)
+            ? persistentTitle
+            : currentWindowTitle;
+        return string.IsNullOrWhiteSpace(title) ? null : new PersistentTitleRule(title);
+    }
 
     private static DetectedProcess FindRunningProcess()
     {

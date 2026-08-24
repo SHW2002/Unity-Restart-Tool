@@ -47,4 +47,34 @@ public sealed class WindowTitleRenamerClientTests
             expected,
             WindowTitleRenamerClient.IsSupportedVersion(new Version(major, minor, build)));
     }
+
+    [Fact]
+    public void SelectRestoreRule_WithPersistentRule_PrefersSavedTitle()
+    {
+        PersistentTitleRule? rule = WindowTitleRenamerClient.SelectRestoreRule(
+            true,
+            "已保存标题",
+            "当前窗口标题");
+
+        Assert.NotNull(rule);
+        Assert.Equal("已保存标题", rule.Title);
+    }
+
+    [Fact]
+    public void SelectRestoreRule_WithoutPersistentRule_UsesCurrentWindowTitle()
+    {
+        PersistentTitleRule? rule = WindowTitleRenamerClient.SelectRestoreRule(
+            false,
+            null,
+            "Unity 13 clone");
+
+        Assert.NotNull(rule);
+        Assert.Equal("Unity 13 clone", rule.Title);
+    }
+
+    [Fact]
+    public void SelectRestoreRule_WithoutAnyUsableTitle_ReturnsNull()
+    {
+        Assert.Null(WindowTitleRenamerClient.SelectRestoreRule(false, null, " "));
+    }
 }

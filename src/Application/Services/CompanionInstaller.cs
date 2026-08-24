@@ -348,6 +348,7 @@ internal sealed class CompanionInstaller
                 .Select(path => Path.GetRelativePath(targetPath, path).Replace('\\', '/'))
                 .FirstOrDefault(relative =>
                     !relative.Equals(InstallStateFileName, StringComparison.OrdinalIgnoreCase) &&
+                    !relative.EndsWith(".meta", StringComparison.OrdinalIgnoreCase) &&
                     !expected.Contains(relative));
             if (unexpected is not null)
             {

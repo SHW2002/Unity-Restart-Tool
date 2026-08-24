@@ -34,6 +34,13 @@ public sealed class CompanionInstallerTests : IDisposable
             "Packages",
             "manifest.json.unity-restart.bak")));
 
+        File.WriteAllText(Path.Combine(
+            project,
+            "LocalPackages",
+            CompanionInstaller.PackageName,
+            "package.json.meta"), "Unity-generated metadata");
+        Assert.True(installer.Inspect(project).Installed);
+
         string installedCode = Path.Combine(
             project,
             "LocalPackages",
@@ -88,6 +95,7 @@ public sealed class CompanionInstallerTests : IDisposable
 
         Assert.Equal("com.shw.unity-restart-companion", CompanionInstaller.PackageName);
         Assert.Equal(CompanionInstaller.PackageName, package["name"]!.GetValue<string>());
+        Assert.Equal("1.0.1", package["version"]!.GetValue<string>());
         Assert.Equal(
             $"file:../LocalPackages/{CompanionInstaller.PackageName}",
             CompanionInstaller.ManifestReference);

@@ -1,0 +1,10 @@
+{
+  "name": "com.wepie.unity-restart-companion",
+  "version": "1.0.0",
+  "displayName": "Unity Restart Tool Companion",
+  "description": "Editor-side safety checks and graceful shutdown protocol for Unity Restart Tool.",
+  "unity": "2021.3",
+  "author": {
+    "name": "wepie"
+  }
+}

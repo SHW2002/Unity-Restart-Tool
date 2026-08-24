@@ -33,9 +33,11 @@ internal sealed class MainForm : Form
     private readonly EditorDiscoveryService _discoveryService;
     private readonly CompanionInstaller _companionInstaller;
     private readonly CompanionClient _companionClient;
+    private readonly WindowTitleRenamerClient _titleRenamerClient;
     private readonly RestartOrchestrator _orchestrator;
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 2500 };
     private readonly System.Windows.Forms.Timer _scheduleTimer = new() { Interval = 10000 };
+    private readonly System.Windows.Forms.Timer _titleRenamerTimer = new() { Interval = 30000 };
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private readonly Dictionary<string, bool> _manualSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _operationStatuses = new(StringComparer.OrdinalIgnoreCase);
@@ -51,6 +53,7 @@ internal sealed class MainForm : Form
     private readonly CheckBox _startMinimizedCheckBox = new();
     private readonly Label _nextScheduleLabel = new();
     private readonly Label _summaryLabel = new();
+    private readonly Label _titleRenamerStatusLabel = new();
     private readonly ListView _logList = new();
     private readonly Label _statusLabel = new();
     private readonly NotifyIcon _notifyIcon = new();
@@ -60,6 +63,7 @@ internal sealed class MainForm : Form
     private bool _refreshing;
     private bool _updatingGrid;
     private bool _updatingSettings;
+    private bool _checkingTitleRenamer;
     private bool _exitRequested;
     private bool _trayHintShown;
 
@@ -79,11 +83,11 @@ internal sealed class MainForm : Form
         _discoveryService = new EditorDiscoveryService(_windowService, logger);
         _companionInstaller = new CompanionInstaller();
         _companionClient = new CompanionClient(_companionInstaller);
-        WindowTitleRenamerClient titleClient = new(logger);
+        _titleRenamerClient = new WindowTitleRenamerClient(logger);
         _orchestrator = new RestartOrchestrator(
             _windowService,
             _companionClient,
-            titleClient,
+            _titleRenamerClient,
             logger);
 
         SuspendLayout();
@@ -122,20 +126,22 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             BackColor = BackgroundColor,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(20, 16, 20, 12),
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 215F));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(BuildHeader(), 0, 0);
         root.Controls.Add(BuildScheduleBand(), 0, 1);
-        root.Controls.Add(BuildInstanceArea(), 0, 2);
-        root.Controls.Add(BuildLogArea(), 0, 3);
-        root.Controls.Add(BuildStatusBar(), 0, 4);
+        root.Controls.Add(BuildTitleRenamerBand(), 0, 2);
+        root.Controls.Add(BuildInstanceArea(), 0, 3);
+        root.Controls.Add(BuildLogArea(), 0, 4);
+        root.Controls.Add(BuildStatusBar(), 0, 5);
         Controls.Add(root);
     }
 
@@ -271,6 +277,39 @@ internal sealed class MainForm : Form
         ConfigureInstanceGrid();
         area.Controls.Add(_instanceGrid);
         return area;
+    }
+
+    private Control BuildTitleRenamerBand()
+    {
+        TableLayoutPanel band = new()
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Fill,
+            BackColor = SurfaceColor,
+            ColumnCount = 3,
+            RowCount = 1,
+            Padding = new Padding(16, 6, 16, 6),
+            Margin = new Padding(0, 0, 0, 10),
+        };
+        band.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        band.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        band.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        band.Controls.Add(new Label
+        {
+            AutoSize = true,
+            Text = "标题联动",
+            ForeColor = PrimaryTextColor,
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            Margin = new Padding(0, 6, 0, 4),
+        }, 0, 0);
+
+        _titleRenamerStatusLabel.AutoSize = true;
+        _titleRenamerStatusLabel.Text = "正在检测 Window-Title-Renamer...";
+        _titleRenamerStatusLabel.ForeColor = InfoColor;
+        _titleRenamerStatusLabel.Margin = new Padding(18, 6, 0, 4);
+        band.Controls.Add(_titleRenamerStatusLabel, 1, 0);
+        return band;
     }
 
     private void ConfigureInstanceGrid()
@@ -503,7 +542,11 @@ internal sealed class MainForm : Form
         Shown += MainForm_Shown;
         Resize += MainForm_Resize;
         FormClosing += MainForm_FormClosing;
-        _refreshButton.Click += async (_, _) => await RefreshInstancesAsync(true);
+        _refreshButton.Click += async (_, _) =>
+        {
+            await RefreshInstancesAsync(true);
+            await RefreshTitleRenamerStatusAsync();
+        };
         _restartButton.Click += async (_, _) => await RestartSelectedAsync(RestartTrigger.Manual);
         _installButton.Click += async (_, _) => await InstallCompanionForCurrentAsync();
         _uninstallButton.Click += async (_, _) => await UninstallCompanionForCurrentAsync();
@@ -522,6 +565,7 @@ internal sealed class MainForm : Form
         _startMinimizedCheckBox.CheckedChanged += (_, _) => SaveStartupSettings();
         _refreshTimer.Tick += async (_, _) => await RefreshInstancesAsync(false);
         _scheduleTimer.Tick += async (_, _) => await CheckScheduleAsync();
+        _titleRenamerTimer.Tick += async (_, _) => await RefreshTitleRenamerStatusAsync();
         _orchestrator.ProgressChanged += Orchestrator_ProgressChanged;
         _logger.EntryWritten += Logger_EntryWritten;
     }
@@ -530,8 +574,10 @@ internal sealed class MainForm : Form
     {
         _logger.Info("应用", "Unity Restart Tool 已启动");
         await RefreshInstancesAsync(true);
+        await RefreshTitleRenamerStatusAsync();
         _refreshTimer.Start();
         _scheduleTimer.Start();
+        _titleRenamerTimer.Start();
         if (_startInTray)
         {
             BeginInvoke(HideToTray);
@@ -583,6 +629,47 @@ internal sealed class MainForm : Form
             _refreshing = false;
             _refreshButton.Enabled = true;
             UpdateActionButtons();
+        }
+    }
+
+    private async Task RefreshTitleRenamerStatusAsync()
+    {
+        if (_checkingTitleRenamer || IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        _checkingTitleRenamer = true;
+        try
+        {
+            WindowTitleRenamerStatus status = await _titleRenamerClient.CheckStatusAsync(
+                _lifetimeCancellation.Token);
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
+            _titleRenamerStatusLabel.Text = status.Message;
+            _titleRenamerStatusLabel.ForeColor = status.Health switch
+            {
+                WindowTitleRenamerHealth.Ready => SuccessColor,
+                WindowTitleRenamerHealth.Incompatible => ErrorColor,
+                WindowTitleRenamerHealth.Unavailable => WarningColor,
+                _ => SecondaryTextColor,
+            };
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _titleRenamerStatusLabel.Text = $"检测失败: {exception.Message}";
+            _titleRenamerStatusLabel.ForeColor = ErrorColor;
+            _logger.Warning("标题联动", $"状态检测失败: {exception.Message}");
+        }
+        finally
+        {
+            _checkingTitleRenamer = false;
         }
     }
 
@@ -982,6 +1069,7 @@ internal sealed class MainForm : Form
             WindowState = FormWindowState.Normal;
         }
         _refreshTimer.Stop();
+        _titleRenamerTimer.Stop();
         if (!_trayHintShown)
         {
             _notifyIcon.BalloonTipTitle = "Unity Restart Tool 正在后台运行";
@@ -999,10 +1087,12 @@ internal sealed class MainForm : Form
         Activate();
         BringToFront();
         await RefreshInstancesAsync(false);
+        await RefreshTitleRenamerStatusAsync();
         if (!_orchestrator.IsRunning)
         {
             _refreshTimer.Start();
         }
+        _titleRenamerTimer.Start();
     }
 
     private void ExitApplication()
@@ -1011,6 +1101,7 @@ internal sealed class MainForm : Form
         _lifetimeCancellation.Cancel();
         _refreshTimer.Stop();
         _scheduleTimer.Stop();
+        _titleRenamerTimer.Stop();
         _notifyIcon.Visible = false;
         Close();
     }
@@ -1150,6 +1241,7 @@ internal sealed class MainForm : Form
             _orchestrator.ProgressChanged -= Orchestrator_ProgressChanged;
             _refreshTimer.Dispose();
             _scheduleTimer.Dispose();
+            _titleRenamerTimer.Dispose();
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             _trayMenu.Dispose();

@@ -22,7 +22,7 @@
 
 companion 会复制到项目的 `LocalPackages/com.shw.unity-restart-companion`，并在 `Packages/manifest.json` 中加入相对 `file:` 引用。安装器会生成完整性记录；检测到用户修改时拒绝覆盖或删除。旧版 `com.wepie.unity-restart-companion` 安装会在升级时自动迁移。
 
-`Window-Title-Renamer` 更新版运行时，本工具会通过当前用户命名管道迁移“持续保持”标题规则。标题工具不可用时仍执行重启，但不恢复标题。
+`Window-Title-Renamer` 2.0.0 或更高版本运行时，本工具会通过当前用户命名管道迁移“持续保持”标题规则。GUI 会持续显示标题工具的运行版本与协议兼容状态；标题工具不可用时仍执行重启，但不恢复标题。
 
 ## 布局与任务栏边界
 

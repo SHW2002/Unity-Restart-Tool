@@ -86,6 +86,48 @@ public sealed class CompanionInstallerTests : IDisposable
     }
 
     [Fact]
+    public void Install_WithReusablePackageButMissingReference_OnlyUpdatesManifest()
+    {
+        string source = Path.Combine(_root, "shared-source");
+        string project = Path.Combine(_root, "shared-project");
+        string manifestPath = Path.Combine(project, "Packages", "manifest.json");
+        CreateSourcePackage(source);
+        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
+        File.WriteAllText(manifestPath, "{\"dependencies\":{}}");
+        CompanionInstaller installer = new(source);
+        installer.Install(project);
+
+        string packagePath = Path.Combine(
+            project,
+            "LocalPackages",
+            CompanionInstaller.PackageName);
+        string generatedMetadataPath = Path.Combine(packagePath, "package.json.meta");
+        File.WriteAllText(generatedMetadataPath, "preserve shared metadata");
+        JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        manifest["dependencies"]!.AsObject().Remove(CompanionInstaller.PackageName);
+        File.WriteAllText(manifestPath, manifest.ToJsonString());
+
+        CompanionInstallInfo beforeInstall = installer.Inspect(project);
+        Assert.False(beforeInstall.Installed);
+        Assert.False(beforeInstall.HasConflict);
+
+        string blockedTemporaryPath = manifestPath + ".unity-restart.tmp";
+        Directory.CreateDirectory(blockedTemporaryPath);
+        Assert.Throws<UnauthorizedAccessException>(() => installer.Install(project));
+        Assert.Equal("preserve shared metadata", File.ReadAllText(generatedMetadataPath));
+
+        Directory.Delete(blockedTemporaryPath);
+        installer.Install(project);
+
+        Assert.Equal("preserve shared metadata", File.ReadAllText(generatedMetadataPath));
+        Assert.True(installer.Inspect(project).Installed);
+        JsonObject updatedManifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+        Assert.Equal(
+            CompanionInstaller.ManifestReference,
+            updatedManifest["dependencies"]![CompanionInstaller.PackageName]!.GetValue<string>());
+    }
+
+    [Fact]
     public void PackageMetadata_UsesShwNamespace()
     {
         CompanionInstaller installer = new();

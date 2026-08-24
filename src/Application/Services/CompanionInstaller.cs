@@ -58,7 +58,7 @@ internal sealed class CompanionInstaller
     {
         string targetPath = GetTargetPackagePath(projectPath, package.Name);
         string manifestPath = GetManifestPath(projectPath);
-        if (!Directory.Exists(targetPath) || !File.Exists(manifestPath))
+        if (!File.Exists(manifestPath))
         {
             return new CompanionInstallInfo(false, false, "未安装");
         }
@@ -66,10 +66,21 @@ internal sealed class CompanionInstaller
         try
         {
             JsonObject manifest = ReadManifest(manifestPath);
-            string? reference = manifest["dependencies"]?[package.Name]?.GetValue<string>();
+            JsonNode? referenceNode = manifest["dependencies"]?[package.Name];
+            if (referenceNode is null)
+            {
+                return new CompanionInstallInfo(false, false, "未安装");
+            }
+
+            string reference = referenceNode.GetValue<string>();
             if (!string.Equals(reference, package.ManifestReference, StringComparison.OrdinalIgnoreCase))
             {
                 return new CompanionInstallInfo(false, true, "存在冲突的包引用");
+            }
+
+            if (!Directory.Exists(targetPath))
+            {
+                return new CompanionInstallInfo(false, false, "包目录缺失");
             }
 
             bool modified = !VerifyInstalledFiles(targetPath, out _);
@@ -109,16 +120,22 @@ internal sealed class CompanionInstaller
                 GetTargetPackagePath(projectPath, package.Name),
                 "覆盖");
         }
-        if (Directory.Exists(targetPath))
-        {
-            Directory.Delete(targetPath, true);
-        }
 
-        CopyDirectory(_sourcePackagePath, targetPath);
-        WriteInstallState(targetPath);
-
+        bool reuseTarget = Directory.Exists(targetPath) &&
+            InstalledPackageMatchesSource(targetPath);
         try
         {
+            if (!reuseTarget)
+            {
+                if (Directory.Exists(targetPath))
+                {
+                    Directory.Delete(targetPath, true);
+                }
+
+                CopyDirectory(_sourcePackagePath, targetPath);
+                WriteInstallState(targetPath);
+            }
+
             UpdateManifest(manifestPath, dependencies =>
             {
                 foreach (PackageIdentity package in ManagedPackages)
@@ -132,7 +149,10 @@ internal sealed class CompanionInstaller
         }
         catch
         {
-            Directory.Delete(targetPath, true);
+            if (!reuseTarget && Directory.Exists(targetPath))
+            {
+                Directory.Delete(targetPath, true);
+            }
             throw;
         }
 
@@ -313,6 +333,43 @@ internal sealed class CompanionInstaller
         File.WriteAllText(
             Path.Combine(targetPath, InstallStateFileName),
             JsonSerializer.Serialize(state, JsonOptions));
+    }
+
+    private bool InstalledPackageMatchesSource(string targetPath)
+    {
+        if (!VerifyInstalledFiles(targetPath, out _))
+        {
+            return false;
+        }
+
+        Dictionary<string, string> sourceFiles = Directory
+            .GetFiles(_sourcePackagePath, "*", SearchOption.AllDirectories)
+            .Where(path => !Path.GetFileName(path).Equals(
+                InstallStateFileName,
+                StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(
+                path => Path.GetRelativePath(_sourcePackagePath, path).Replace('\\', '/'),
+                ComputeHash,
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach ((string relative, string expectedHash) in sourceFiles)
+        {
+            string targetFile = Path.Combine(
+                targetPath,
+                relative.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(targetFile) ||
+                !string.Equals(ComputeHash(targetFile), expectedHash, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return Directory.GetFiles(targetPath, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(targetPath, path).Replace('\\', '/'))
+            .All(relative =>
+                relative.Equals(InstallStateFileName, StringComparison.OrdinalIgnoreCase) ||
+                relative.EndsWith(".meta", StringComparison.OrdinalIgnoreCase) ||
+                sourceFiles.ContainsKey(relative));
     }
 
     private static bool VerifyInstalledFiles(string targetPath, out string error)

@@ -59,7 +59,8 @@ namespace UnityRestartCompanion
                 }
             }
 
-            HashSet<string> dirtyAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, List<UnityEngine.Object>> dirtyObjectsByAsset =
+                new Dictionary<string, List<UnityEngine.Object>>(StringComparer.OrdinalIgnoreCase);
             UnityEngine.Object[] loadedObjects = Resources.FindObjectsOfTypeAll<UnityEngine.Object>();
             foreach (UnityEngine.Object loadedObject in loadedObjects)
             {
@@ -73,12 +74,26 @@ namespace UnityRestartCompanion
                 string path = AssetDatabase.GetAssetPath(loadedObject);
                 if (IsUserProjectAsset(path))
                 {
-                    dirtyAssets.Add(path);
+                    List<UnityEngine.Object> dirtyObjects;
+                    if (!dirtyObjectsByAsset.TryGetValue(path, out dirtyObjects))
+                    {
+                        dirtyObjects = new List<UnityEngine.Object>();
+                        dirtyObjectsByAsset.Add(path, dirtyObjects);
+                    }
+                    dirtyObjects.Add(loadedObject);
+                }
+            }
+
+            foreach (KeyValuePair<string, List<UnityEngine.Object>> entry in dirtyObjectsByAsset)
+            {
+                if (!DirtyAssetContentComparer.TryClearFalsePositive(entry.Key, entry.Value))
+                {
+                    snapshot.dirtyAssets.Add(entry.Key);
                 }
             }
 
             snapshot.dirtyScenes.Sort(StringComparer.OrdinalIgnoreCase);
-            snapshot.dirtyAssets.AddRange(dirtyAssets.OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+            snapshot.dirtyAssets.Sort(StringComparer.OrdinalIgnoreCase);
             return snapshot;
         }
 

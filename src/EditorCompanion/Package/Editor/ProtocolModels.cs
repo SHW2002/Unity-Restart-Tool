@@ -43,6 +43,7 @@ namespace UnityRestartCompanion
     internal sealed class StatusEnvelope
     {
         public int protocolVersion = 1;
+        public string companionVersion;
         public int processId;
         public string heartbeatUtc;
         public string editorVersion;

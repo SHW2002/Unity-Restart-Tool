@@ -9,6 +9,7 @@ namespace UnityRestartCompanion
     internal static class UnityRestartCompanionHost
     {
         private const int ProtocolVersion = 1;
+        private const string CompanionVersion = "1.0.1";
         private const double PollIntervalSeconds = 0.2;
         private const double HeartbeatIntervalSeconds = 1.0;
         private const double ConsoleStabilizationSeconds = 3.0;
@@ -211,6 +212,7 @@ namespace UnityRestartCompanion
                 SafetySnapshot safety = EditorSafetyInspector.Capture(false);
                 AtomicJsonFile.Write(StatusPath, new StatusEnvelope
                 {
+                    companionVersion = CompanionVersion,
                     processId = System.Diagnostics.Process.GetCurrentProcess().Id,
                     heartbeatUtc = DateTime.UtcNow.ToString("o"),
                     editorVersion = Application.unityVersion,

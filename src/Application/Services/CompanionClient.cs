@@ -8,6 +8,7 @@ namespace UnityRestartTool.Services;
 internal sealed class CompanionClient
 {
     internal const int ProtocolVersion = 1;
+    internal static readonly Version MinimumCompanionVersion = new(1, 0, 1);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -72,6 +73,20 @@ internal sealed class CompanionClient
                     status.HeartbeatUtc);
             }
 
+            if (!IsSupportedCompanionVersion(status.CompanionVersion))
+            {
+                string currentVersion = string.IsNullOrWhiteSpace(status.CompanionVersion)
+                    ? "旧版"
+                    : status.CompanionVersion;
+                return new CompanionState(
+                    CompanionHealth.Incompatible,
+                    $"companion 版本过低（当前 {currentVersion}，要求 {MinimumCompanionVersion} 或更高），" +
+                    "请安装 / 升级后刷新编辑器",
+                    status.ProcessId,
+                    status.ProtocolVersion,
+                    status.HeartbeatUtc);
+            }
+
             return new CompanionState(
                 CompanionHealth.Ready,
                 "就绪",
@@ -84,6 +99,9 @@ internal sealed class CompanionClient
             return new CompanionState(CompanionHealth.Error, $"状态读取失败: {exception.Message}");
         }
     }
+
+    internal static bool IsSupportedCompanionVersion(string? version) =>
+        Version.TryParse(version, out Version? parsed) && parsed >= MinimumCompanionVersion;
 
     public async Task<PreflightResult> PreflightAsync(
         EditorInstance instance,
@@ -245,6 +263,9 @@ internal sealed class CompanionClient
 
         [JsonPropertyName("processId")]
         public int ProcessId { get; set; }
+
+        [JsonPropertyName("companionVersion")]
+        public string? CompanionVersion { get; set; }
 
         [JsonPropertyName("heartbeatUtc")]
         public DateTime HeartbeatUtc { get; set; }

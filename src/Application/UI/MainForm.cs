@@ -382,15 +382,17 @@ internal sealed class MainForm : Form
             RowCount = 2,
             Margin = Padding.Empty,
         };
-        area.RowStyles.Add(new RowStyle(SizeType.Absolute, 39F));
+        area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         area.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         TableLayoutPanel header = new()
         {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Padding = new Padding(12, 5, 8, 4),
+            Padding = new Padding(12, 6, 8, 6),
         };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -400,7 +402,7 @@ internal sealed class MainForm : Form
             Text = "运行日志",
             ForeColor = PrimaryTextColor,
             Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-            Margin = new Padding(0, 5, 0, 0),
+            Margin = new Padding(0, 4, 0, 2),
         }, 0, 0);
         FlowLayoutPanel logActions = new()
         {
@@ -410,10 +412,10 @@ internal sealed class MainForm : Form
             Margin = Padding.Empty,
         };
         Button copyButton = new ThemedButton();
-        ConfigureButton(copyButton, "复制", false, 78, 30);
+        ConfigureButton(copyButton, "复制", false, 78, 32);
         copyButton.Click += (_, _) => CopySelectedLog();
         Button openButton = new ThemedButton();
-        ConfigureButton(openButton, "打开目录", false, 112, 30);
+        ConfigureButton(openButton, "打开目录", false, 112, 32);
         openButton.Click += (_, _) => OpenLogDirectory();
         logActions.Controls.AddRange([copyButton, openButton]);
         header.Controls.Add(logActions, 1, 0);

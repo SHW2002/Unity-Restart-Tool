@@ -28,6 +28,7 @@ internal sealed class MainForm : Form
     private readonly SettingsStore _settingsStore;
     private readonly AppLogger _logger;
     private readonly bool _startInTray;
+    private readonly Icon? _applicationIcon;
     private readonly WindowService _windowService;
     private readonly EditorDiscoveryService _discoveryService;
     private readonly CompanionInstaller _companionInstaller;
@@ -72,6 +73,7 @@ internal sealed class MainForm : Form
         _settingsStore = settingsStore;
         _logger = logger;
         _startInTray = startInTray;
+        _applicationIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
         _windowService = new WindowService();
         _discoveryService = new EditorDiscoveryService(_windowService, logger);
@@ -110,7 +112,7 @@ internal sealed class MainForm : Form
         Font = new Font("Segoe UI", 9.5F, FontStyle.Regular, GraphicsUnit.Point);
         AutoScaleMode = AutoScaleMode.Dpi;
         DoubleBuffered = true;
-        Icon = SystemIcons.Application;
+        Icon = _applicationIcon ?? SystemIcons.Application;
     }
 
     private void BuildLayout()
@@ -464,7 +466,7 @@ internal sealed class MainForm : Form
         exitItem.Click += (_, _) => ExitApplication();
         _trayMenu.Items.AddRange([showItem, restartItem, pauseItem, new ToolStripSeparator(), exitItem]);
 
-        _notifyIcon.Icon = SystemIcons.Application;
+        _notifyIcon.Icon = _applicationIcon ?? SystemIcons.Application;
         _notifyIcon.Text = "Unity Restart Tool";
         _notifyIcon.ContextMenuStrip = _trayMenu;
         _notifyIcon.Visible = true;
@@ -1149,6 +1151,7 @@ internal sealed class MainForm : Form
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             _trayMenu.Dispose();
+            _applicationIcon?.Dispose();
             _lifetimeCancellation.Dispose();
         }
         base.Dispose(disposing);

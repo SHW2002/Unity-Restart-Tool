@@ -8,7 +8,7 @@ namespace UnityRestartTool.Services;
 internal sealed class CompanionClient
 {
     internal const int ProtocolVersion = 1;
-    internal static readonly Version MinimumCompanionVersion = new(1, 0, 1);
+    internal static readonly Version MinimumCompanionVersion = new(1, 0, 2);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,

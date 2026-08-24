@@ -1,16 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using UnityEditor;
-using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace UnityRestartCompanion
 {
     internal static class EditorSafetyInspector
     {
-        public static SafetySnapshot Capture(bool includeDirtyObjects)
+        public static SafetySnapshot Capture()
         {
             SafetySnapshot snapshot = new SafetySnapshot();
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -30,115 +26,7 @@ namespace UnityRestartCompanion
                 snapshot.busyReasons.Add("正在构建 Player");
             }
 
-            if (!includeDirtyObjects)
-            {
-                return snapshot;
-            }
-
-            if (snapshot.busyReasons.Count > 0)
-            {
-                return snapshot;
-            }
-
-            for (int index = 0; index < SceneManager.sceneCount; index++)
-            {
-                Scene scene = SceneManager.GetSceneAt(index);
-                if (scene.IsValid() && scene.isDirty)
-                {
-                    snapshot.dirtyScenes.Add(SceneLabel(scene));
-                }
-            }
-
-            Scene? prefabScene = TryGetPrefabStageScene();
-            if (prefabScene.HasValue && prefabScene.Value.IsValid() && prefabScene.Value.isDirty)
-            {
-                string label = SceneLabel(prefabScene.Value);
-                if (!snapshot.dirtyScenes.Contains(label))
-                {
-                    snapshot.dirtyScenes.Add(label);
-                }
-            }
-
-            Dictionary<string, List<UnityEngine.Object>> dirtyObjectsByAsset =
-                new Dictionary<string, List<UnityEngine.Object>>(StringComparer.OrdinalIgnoreCase);
-            UnityEngine.Object[] loadedObjects = Resources.FindObjectsOfTypeAll<UnityEngine.Object>();
-            foreach (UnityEngine.Object loadedObject in loadedObjects)
-            {
-                if (loadedObject == null ||
-                    !EditorUtility.IsPersistent(loadedObject) ||
-                    !EditorUtility.IsDirty(loadedObject))
-                {
-                    continue;
-                }
-
-                string path = AssetDatabase.GetAssetPath(loadedObject);
-                if (IsUserProjectAsset(path))
-                {
-                    List<UnityEngine.Object> dirtyObjects;
-                    if (!dirtyObjectsByAsset.TryGetValue(path, out dirtyObjects))
-                    {
-                        dirtyObjects = new List<UnityEngine.Object>();
-                        dirtyObjectsByAsset.Add(path, dirtyObjects);
-                    }
-                    dirtyObjects.Add(loadedObject);
-                }
-            }
-
-            foreach (KeyValuePair<string, List<UnityEngine.Object>> entry in dirtyObjectsByAsset)
-            {
-                if (!DirtyAssetContentComparer.TryClearFalsePositive(entry.Key, entry.Value))
-                {
-                    snapshot.dirtyAssets.Add(entry.Key);
-                }
-            }
-
-            snapshot.dirtyScenes.Sort(StringComparer.OrdinalIgnoreCase);
-            snapshot.dirtyAssets.Sort(StringComparer.OrdinalIgnoreCase);
             return snapshot;
-        }
-
-        private static bool IsUserProjectAsset(string path)
-        {
-            return !string.IsNullOrEmpty(path) &&
-                (path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ||
-                 path.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase) ||
-                 path.StartsWith("ProjectSettings/", StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static string SceneLabel(Scene scene)
-        {
-            if (!string.IsNullOrEmpty(scene.path))
-            {
-                return scene.path;
-            }
-            return string.IsNullOrEmpty(scene.name) ? "未命名场景" : scene.name;
-        }
-
-        private static Scene? TryGetPrefabStageScene()
-        {
-            try
-            {
-                Assembly editorAssembly = typeof(Editor).Assembly;
-                Type utility = editorAssembly.GetType("UnityEditor.SceneManagement.PrefabStageUtility") ??
-                    editorAssembly.GetType("UnityEditor.Experimental.SceneManagement.PrefabStageUtility");
-                MethodInfo getCurrent = utility == null
-                    ? null
-                    : utility.GetMethod(
-                        "GetCurrentPrefabStage",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                object stage = getCurrent == null ? null : getCurrent.Invoke(null, null);
-                PropertyInfo sceneProperty = stage == null
-                    ? null
-                    : stage.GetType().GetProperty(
-                        "scene",
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-                object value = sceneProperty == null ? null : sceneProperty.GetValue(stage, null);
-                return value is Scene ? (Scene?)value : null;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
         }
     }
 
@@ -153,7 +41,7 @@ namespace UnityRestartCompanion
         {
             get
             {
-                return dirtyScenes.Count == 0 && dirtyAssets.Count == 0 && busyReasons.Count == 0;
+                return busyReasons.Count == 0;
             }
         }
     }

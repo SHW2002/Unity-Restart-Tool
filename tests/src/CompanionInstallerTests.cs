@@ -95,7 +95,7 @@ public sealed class CompanionInstallerTests : IDisposable
 
         Assert.Equal("com.shw.unity-restart-companion", CompanionInstaller.PackageName);
         Assert.Equal(CompanionInstaller.PackageName, package["name"]!.GetValue<string>());
-        Assert.Equal("1.0.1", package["version"]!.GetValue<string>());
+        Assert.Equal("1.0.2", package["version"]!.GetValue<string>());
         Assert.Equal(
             $"file:../LocalPackages/{CompanionInstaller.PackageName}",
             CompanionInstaller.ManifestReference);

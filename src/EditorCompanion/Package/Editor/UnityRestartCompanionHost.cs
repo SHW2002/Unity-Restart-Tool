@@ -9,7 +9,7 @@ namespace UnityRestartCompanion
     internal static class UnityRestartCompanionHost
     {
         private const int ProtocolVersion = 1;
-        private const string CompanionVersion = "1.0.1";
+        private const string CompanionVersion = "1.0.2";
         private const double PollIntervalSeconds = 0.2;
         private const double HeartbeatIntervalSeconds = 1.0;
         private const double ConsoleStabilizationSeconds = 3.0;
@@ -97,10 +97,10 @@ namespace UnityRestartCompanion
 
         private static void BeginPreflight(RequestEnvelope request)
         {
-            SafetySnapshot initial = EditorSafetyInspector.Capture(true);
+            SafetySnapshot initial = EditorSafetyInspector.Capture();
             if (!initial.IsSafe)
             {
-                PublishPreflight(request.id, BuildPayload(initial, 0, "编辑器存在忙碌或未保存状态"));
+                PublishPreflight(request.id, BuildPayload(initial, 0, "编辑器正忙"));
                 return;
             }
 
@@ -119,7 +119,7 @@ namespace UnityRestartCompanion
 
         private static void CompletePreflight(PendingPreflight pending)
         {
-            SafetySnapshot safety = EditorSafetyInspector.Capture(true);
+            SafetySnapshot safety = EditorSafetyInspector.Capture();
             int consoleCount;
             string error;
             if (!ConsoleAccess.TryGetCount(out consoleCount, out error))
@@ -130,13 +130,13 @@ namespace UnityRestartCompanion
 
             string reason = consoleCount > 0
                 ? "Console 清空后重新出现信息"
-                : safety.IsSafe ? string.Empty : "观察期间出现忙碌或未保存状态";
+                : safety.IsSafe ? string.Empty : "观察期间编辑器变为忙碌状态";
             PublishPreflight(pending.RequestId, BuildPayload(safety, consoleCount, reason));
         }
 
         private static void HandleShutdown(RequestEnvelope request)
         {
-            SafetySnapshot safety = EditorSafetyInspector.Capture(true);
+            SafetySnapshot safety = EditorSafetyInspector.Capture();
             int consoleCount;
             string error;
             if (!ConsoleAccess.TryGetCount(out consoleCount, out error))
@@ -149,7 +149,7 @@ namespace UnityRestartCompanion
                 safety,
                 consoleCount,
                 consoleCount > 0 ? "退出前 Console 出现新信息" :
-                    safety.IsSafe ? string.Empty : "退出前编辑器状态发生变化");
+                    safety.IsSafe ? string.Empty : "退出前编辑器变为忙碌状态");
             if (!payload.eligible)
             {
                 PublishError(request.id, "SHUTDOWN_REJECTED", payload.reason);
@@ -209,7 +209,7 @@ namespace UnityRestartCompanion
         {
             try
             {
-                SafetySnapshot safety = EditorSafetyInspector.Capture(false);
+                SafetySnapshot safety = EditorSafetyInspector.Capture();
                 AtomicJsonFile.Write(StatusPath, new StatusEnvelope
                 {
                     companionVersion = CompanionVersion,

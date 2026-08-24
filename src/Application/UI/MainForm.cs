@@ -743,7 +743,14 @@ internal sealed class MainForm : Form
         }
 
         string columnName = _instanceGrid.Columns[eventArgs.ColumnIndex].Name;
-        bool value = Convert.ToBoolean(row.Cells[eventArgs.ColumnIndex].Value ?? false);
+        if (!TryGetBooleanCellValue(
+                columnName,
+                row.Cells[eventArgs.ColumnIndex].Value,
+                out bool value))
+        {
+            return;
+        }
+
         if (columnName == "SelectedColumn")
         {
             _manualSelections[instance.ProjectPath] = value;
@@ -756,6 +763,21 @@ internal sealed class MainForm : Form
             _settings.Projects[instance.ProjectPath] = policy;
             SaveSettings();
         }
+    }
+
+    internal static bool TryGetBooleanCellValue(
+        string columnName,
+        object? cellValue,
+        out bool value)
+    {
+        if (columnName is not "SelectedColumn" and not "ScheduleColumn")
+        {
+            value = false;
+            return false;
+        }
+
+        value = Convert.ToBoolean(cellValue ?? false, CultureInfo.InvariantCulture);
+        return true;
     }
 
     private async Task RestartSelectedAsync(RestartTrigger trigger)

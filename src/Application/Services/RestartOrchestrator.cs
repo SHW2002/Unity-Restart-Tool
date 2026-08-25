@@ -230,11 +230,21 @@ internal sealed class RestartOrchestrator
                     cancellationToken);
             }
 
-            string message = titleRestored
-                ? "重启完成，窗口与标题规则已恢复"
-                : "重启完成，但持续标题规则恢复失败";
-            Report(instance, RestartStage.Completed, message, !titleRestored);
-            _logger.Info(instance.ProjectName, message);
+            string message = candidate.TitleRule is null
+                ? "重启完成，窗口布局已恢复，但未发现可恢复的标题规则"
+                : titleRestored
+                    ? "重启完成，窗口与标题规则已恢复"
+                    : "重启完成，但持续标题规则恢复失败";
+            bool titleRecoveryWarning = candidate.TitleRule is null || !titleRestored;
+            Report(instance, RestartStage.Completed, message, titleRecoveryWarning);
+            if (titleRecoveryWarning)
+            {
+                _logger.Warning(instance.ProjectName, message);
+            }
+            else
+            {
+                _logger.Info(instance.ProjectName, message);
+            }
             return new RestartInstanceResult(instance.ProjectPath, true, false, message);
         }
         catch (Exception exception)

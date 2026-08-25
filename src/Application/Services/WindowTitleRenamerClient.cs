@@ -12,7 +12,7 @@ internal sealed class WindowTitleRenamerClient
 {
     internal const string PipeName = "WindowTitleRenamer.UnityRestart.v1";
     internal const string ProcessName = "Window-Title-Renamer";
-    internal static readonly Version MinimumSupportedVersion = new(2, 0, 0);
+    internal static readonly Version MinimumSupportedVersion = new(2, 1, 0);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,

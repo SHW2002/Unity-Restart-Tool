@@ -35,9 +35,10 @@ public sealed class WindowTitleRenamerClientTests
 
     [Theory]
     [InlineData(1, 9, 9, false)]
-    [InlineData(2, 0, 0, true)]
+    [InlineData(2, 0, 9, false)]
     [InlineData(2, 1, 0, true)]
-    public void IsSupportedVersion_RequiresVersionTwoOrNewer(
+    [InlineData(2, 2, 0, true)]
+    public void IsSupportedVersion_RequiresVersionTwoPointOneOrNewer(
         int major,
         int minor,
         int build,

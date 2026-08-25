@@ -94,11 +94,47 @@ internal sealed class WindowService
             throw new Win32Exception(Marshal.GetLastWin32Error(), "GetWindowPlacement failed.");
         }
 
+        MonitorSnapshot? monitor = TryGetMonitorSnapshot(
+            NativeMethods.MonitorFromWindow(
+                windowHandle,
+                NativeMethods.MonitorDefaultToNearest));
+
         return new WindowSnapshot(
             windowHandle,
             placement,
             order,
-            NativeMethods.ReadWindowTitle(windowHandle));
+            NativeMethods.ReadWindowTitle(windowHandle),
+            monitor);
+    }
+
+    public IReadOnlyList<MonitorSnapshot> EnumerateMonitors()
+    {
+        List<MonitorSnapshot> monitors = [];
+        NativeMethods.MonitorEnumProc callback = (
+            IntPtr monitorHandle,
+            IntPtr deviceContext,
+            ref NativeRect monitorRect,
+            IntPtr parameter) =>
+        {
+            MonitorSnapshot? monitor = TryGetMonitorSnapshot(monitorHandle);
+            if (monitor is not null && monitors.All(existing =>
+                    !string.Equals(
+                        existing.DeviceName,
+                        monitor.DeviceName,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                monitors.Add(monitor);
+            }
+
+            return true;
+        };
+
+        NativeMethods.EnumDisplayMonitors(
+            IntPtr.Zero,
+            IntPtr.Zero,
+            callback,
+            IntPtr.Zero);
+        return monitors;
     }
 
     public void Restore(IntPtr windowHandle, WindowSnapshot snapshot)
@@ -109,11 +145,44 @@ internal sealed class WindowService
         }
 
         WindowPlacement placement = snapshot.Placement;
+        if (snapshot.Monitor is not null)
+        {
+            MonitorSnapshot? targetMonitor = WindowPlacementMapper.SelectTargetMonitor(
+                EnumerateMonitors(),
+                snapshot.Monitor);
+            if (targetMonitor is not null)
+            {
+                placement.NormalPosition = WindowPlacementMapper.MapNormalPosition(
+                    placement.NormalPosition,
+                    snapshot.Monitor,
+                    targetMonitor);
+            }
+        }
+
         placement.Length = Marshal.SizeOf<WindowPlacement>();
         if (!NativeMethods.SetWindowPlacement(windowHandle, ref placement))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "SetWindowPlacement failed.");
         }
+    }
+
+    private static MonitorSnapshot? TryGetMonitorSnapshot(IntPtr monitorHandle)
+    {
+        if (monitorHandle == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        MonitorInfoEx monitorInfo = MonitorInfoEx.Create();
+        if (!NativeMethods.GetMonitorInfoW(monitorHandle, ref monitorInfo))
+        {
+            return null;
+        }
+
+        string deviceName = monitorInfo.DeviceName?.TrimEnd('\0') ?? string.Empty;
+        return string.IsNullOrWhiteSpace(deviceName)
+            ? null
+            : new MonitorSnapshot(deviceName, monitorInfo.Monitor, monitorInfo.Work);
     }
 }
 
@@ -121,4 +190,5 @@ internal sealed record WindowSnapshot(
     IntPtr OriginalHandle,
     WindowPlacement Placement,
     int Order,
-    string Title);
+    string Title,
+    MonitorSnapshot? Monitor);

@@ -83,6 +83,9 @@ public sealed class EditorRestartIntegrationTests
                 restarted.WindowOrder) ?? throw new InvalidOperationException("无法捕获重启后的窗口。");
             Assert.Equal(originalWindow.Placement.ShowCommand, restoredWindow.Placement.ShowCommand);
             AssertRectClose(originalWindow.Placement.NormalPosition, restoredWindow.Placement.NormalPosition, 3);
+            Assert.NotNull(originalWindow.Monitor);
+            Assert.NotNull(restoredWindow.Monitor);
+            Assert.Equal(originalWindow.Monitor.DeviceName, restoredWindow.Monitor.DeviceName);
 
             PreflightResult cleanupPreflight = await companion.PreflightAsync(restarted, timeout.Token);
             Assert.True(cleanupPreflight.Eligible, cleanupPreflight.Reason);
